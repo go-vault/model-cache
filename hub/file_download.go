@@ -33,6 +33,12 @@ func (client *Client) Download(params *DownloadParams) (string, error) {
 		params.Repo.Revision = params.Revision
 	}
 
+	// if no filename is specified, use snapshot downloader
+	if params.FileName == "" {
+		return snapshotDownload(client, params)
+	}
+
+	// otherwise, download the file
 	return fileDownload(client, params)
 }
 
