@@ -273,3 +273,12 @@ func checkConnectivity(localFilesOnly bool) error {
 	return nil
 }
 
+
+func getHeaders(client *Client) *http.Header {
+	headers := &http.Header{}
+	headers.Set("User-Agent", client.UserAgent)
+	if client.Token != "" {
+		headers.Set("Authorization", "Bearer "+client.Token)
+	}
+	return headers
+}

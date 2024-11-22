@@ -124,7 +124,6 @@ func fileDownload(client *Client, params *DownloadParams) (string, error) {
 	}
 
 	// lock directory for concurrent downloads
-
 	locksDir := filepath.Join(client.CacheDir, ".locks")
 	if err := os.MkdirAll(locksDir, 0755); err != nil {
 		return "", fmt.Errorf("failed to create locks directory: %w", err)

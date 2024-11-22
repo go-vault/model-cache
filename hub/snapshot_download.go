@@ -55,13 +55,22 @@ func snapshotDownload(client *Client, params *DownloadParams) (string, error) {
 		}
 	}
 
-	pd := newParallelDownloader()
 
-	// Queue all files for download
-    for _, sibling := range modelInfo.Siblings {
+	// filter files based on patterns before downloading
+	var filesToDownload []string
+	for _, sibling := range modelInfo.Siblings {
+		filesToDownload = append(filesToDownload, sibling.RFileName)
+	}
+	filesToDownload = filterFilesByPattern(filesToDownload, params.AllowPatterns, params.IgnorePatterns)
+
+	pd := newParallelDownloader(len(filesToDownload))
+
+
+	// start download
+    for _, filename := range filesToDownload {
         fileParams := &DownloadParams{
             Repo:           params.Repo,
-            FileName:       sibling.RFileName,
+            FileName:       filename,
             Revision:       modelInfo.Sha,
             ForceDownload:  params.ForceDownload,
             LocalFilesOnly: params.LocalFilesOnly,
@@ -69,9 +78,12 @@ func snapshotDownload(client *Client, params *DownloadParams) (string, error) {
         pd.downloadFile(client, fileParams)
     }
 
-    // Wait for all downloads
+    // wait for all downloads
     pd.wg.Wait()
     close(pd.errors)
+
+	// ensure total bar shows completion
+    pd.totalBar.SetTotal(int64(pd.totalFiles), true)
 
     // Check for errors
     for err := range pd.errors {

@@ -18,7 +18,7 @@ import (
 // 			Id: "stable-diffusion-v1-5/stable-diffusion-v1-5",
 // 			Type: hub.ModelRepoType,
 // 		},
-// 		FileName: "v1-5-pruned-emaonly.ckpt",
+// 		FileName: "unet/diffusion_pytorch_model.safetensors",
 // 	}
 
 // 	path, err := client.Download(params)
@@ -28,8 +28,6 @@ import (
 
 // 	fmt.Println("File downloaded to:", path)
 // }
-
-
 
 
 // test snapshot download
@@ -43,7 +41,17 @@ func main() {
 			Id: "stable-diffusion-v1-5/stable-diffusion-v1-5",
 			Type: hub.ModelRepoType,
 		},
-		// FileName: "v1-5-pruned-emaonly.ckpt",
+		AllowPatterns: []string{
+			// "*.json",
+			// "*.txt",
+			"text_encoder/*",
+		},
+
+		// IgnorePatterns: []string{
+		// 	"*.bin",
+		// 	"*model.safetensors",
+		// 	"*balstadar",
+		// },
 	}
 
 	path, err := client.Download(params)

@@ -103,6 +103,8 @@ type DownloadParams struct {
 	Revision    	string
 	ForceDownload 	bool
 	LocalFilesOnly 	bool
+	AllowPatterns   []string
+	IgnorePatterns  []string
 }
 
 type Repo struct {
@@ -117,4 +119,6 @@ type FileMetadata struct {
 	Location   string
 	Size       int
 }
+
+
 

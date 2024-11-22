@@ -1,18 +1,20 @@
 package hub
 
 import (
-    "net/http"
-    "os"
-    "fmt"
-    "sync"
-    "time"
-    "path/filepath"
-    "bufio"
-    "io"
-    // "strings"
+	"bufio"
+	"fmt"
+	"io"
+	"net/http"
+	"os"
+	"path/filepath"
+	"sync"
+	"sync/atomic"
+	"time"
 
-    "github.com/vbauerster/mpb/v8"
-    "github.com/vbauerster/mpb/v8/decor"
+	// "strings"
+
+	"github.com/vbauerster/mpb/v7"
+	"github.com/vbauerster/mpb/v7/decor"
 )
 
 
@@ -20,17 +22,34 @@ type parallelDownloader struct {
     progress *mpb.Progress
     wg       sync.WaitGroup
     errors   chan error
+    totalFiles int
+    downloadedFiles atomic.Int32
+    totalBar *mpb.Bar
 }
 
 
-func newParallelDownloader() *parallelDownloader {
-    return &parallelDownloader{
+func newParallelDownloader(totalFiles int) *parallelDownloader {
+    pd := &parallelDownloader{
         progress: mpb.New(
             mpb.WithWidth(60),
             mpb.WithRefreshRate(180*time.Millisecond),
         ),
         errors: make(chan error, 100),
+        totalFiles: totalFiles,
     }
+
+    pd.totalBar = pd.progress.AddBar(
+        int64(totalFiles),
+        mpb.PrependDecorators(
+            decor.Name(fmt.Sprintf("Fetching %d files:", totalFiles), decor.WC{W: len(fmt.Sprint(totalFiles)) + 20}),
+            decor.CountersNoUnit("%d/%d", decor.WCSyncWidth),
+        ),
+        mpb.AppendDecorators(
+            decor.NewPercentage("%d ", decor.WCSyncSpace),
+        ),
+    )
+
+    return pd
 }
 
 
@@ -39,46 +58,72 @@ func (pd *parallelDownloader) downloadFile(client *Client, params *DownloadParam
     go func() {
         defer pd.wg.Done()
 
-        bar := pd.progress.AddBar(
-            -1, // Update total when we get metadata,
-            mpb.PrependDecorators(
-                decor.Name(params.FileName, decor.WC{W: 45, C: decor.DindentRight}),
-                decor.Percentage(decor.WCSyncSpace),
-                decor.Name("|", decor.WCSyncSpace),
-            ),
-            mpb.AppendDecorators(
-                decor.CountersKibiByte("% .2f / % .2f"),
-
-                // add space between speed and percentage
-                decor.Name("|", decor.WCSyncSpace),
-                decor.AverageSpeed(decor.SizeB1024(0), "% .2f"),
-            ),
+        storageFolder := filepath.Join(
+            client.CacheDir,
+            repoFolderName(params.Repo.Id, params.Repo.Type),
         )
 
-        if _, err := pd.downloadSingleFile(client, params, bar); err != nil {
+        // metadata to check if file exists
+        headers := getHeaders(client)
+
+        metadata, err := getFileMetadata(client, params.Repo.Id, params.FileName, headers)
+        if err != nil {
+            pd.errors <- fmt.Errorf("failed to get metadata for %s: %w", params.FileName, err)
+            return
+        }
+
+        pointerPath := filepath.Join(storageFolder, "snapshots", metadata.CommitHash, params.FileName)
+        blobPath := filepath.Join(storageFolder, "blobs", metadata.ETag)
+
+        // check if file already exists and we're not forcing download
+        if !params.ForceDownload {
+            if _, err := os.Stat(pointerPath); err == nil {
+                pd.downloadedFiles.Add(1)
+                pd.totalBar.Increment()
+                return
+            }
+            if _, err := os.Stat(blobPath); err == nil {
+                // blob exists but pointer doesn't exist - create the pointer
+                os.MkdirAll(filepath.Dir(pointerPath), 0755)
+                if err := createSymlink(blobPath, pointerPath); err != nil {
+                    pd.errors <- fmt.Errorf("failed to create symlink for %s: %w", params.FileName, err)
+                    return
+                }
+                pd.downloadedFiles.Add(1)
+                pd.totalBar.Increment()
+                return
+            }
+        }
+
+
+        bar := pd.progress.AddBar(
+            int64(metadata.Size),
+            mpb.PrependDecorators(
+                decor.Name(params.FileName, decor.WC{W: 50, C: decor.DidentRight}),
+                decor.Percentage(decor.WCSyncSpace),
+            ),
+            mpb.AppendDecorators(
+                decor.CountersKibiByte("%.2f / %.2f", decor.WCSyncWidth),
+                decor.Name(" | ", decor.WCSyncSpace),
+                decor.AverageSpeed(decor.UnitKB, "%.2f", decor.WCSyncSpace),
+            ),
+            mpb.BarWidth(70),
+        )
+
+
+        if _, err := pd.downloadSingleFile(client, params, bar, metadata); err != nil {
             pd.errors <- fmt.Errorf("failed to download %s: %w", params.FileName, err)
             bar.Abort(true)
+            return
         }
+
+        pd.downloadedFiles.Add(1)
+        pd.totalBar.Increment()
     }()
 }
 
 
-func (pd *parallelDownloader) downloadSingleFile(client *Client, params *DownloadParams, bar *mpb.Bar) (string, error) {
-    // Get metadata first
-    headers := &http.Header{}
-    headers.Set("User-Agent", client.UserAgent)
-    if client.Token != "" {
-        headers.Set("Authorization", "Bearer "+client.Token)
-    }
-
-    metadata, err := getFileMetadata(client, params.Repo.Id, params.FileName, headers)
-    if err != nil {
-        return "", err
-    }
-
-    // Set the total size for progress bar
-    bar.SetTotal(int64(metadata.Size), false)
-
+func (pd *parallelDownloader) downloadSingleFile(client *Client, params *DownloadParams, bar *mpb.Bar, metadata *FileMetadata) (string, error) {
 
     storageFolder := filepath.Join(
         client.CacheDir,
@@ -93,6 +138,12 @@ func (pd *parallelDownloader) downloadSingleFile(client *Client, params *Downloa
 
     // Download with progress
     tmpPath := blobPath + ".incomplete"
+    headers := &http.Header{}
+    headers.Set("User-Agent", client.UserAgent)
+    if client.Token != "" {
+        headers.Set("Authorization", "Bearer "+client.Token)
+    }
+
     if err := downloadWithBar(metadata.Location, tmpPath, headers, bar); err != nil {
         return "", err
     }
@@ -187,11 +238,3 @@ func downloadWithBar(url string, destPath string, headers *http.Header, bar *mpb
 
     return nil
 }
-
-// truncateFilename helper
-// func truncateFilename(name string, maxLen int) string {
-//     if len(name) <= maxLen {
-//         return name + strings.Repeat(" ", maxLen-len(name))
-//     }
-//     return "..." + name[len(name)-(maxLen-3):]
-// }
