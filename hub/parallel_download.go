@@ -238,3 +238,12 @@ func downloadWithBar(url string, destPath string, headers *http.Header, bar *mpb
 
     return nil
 }
+
+func (pd *parallelDownloader) Wait() {
+    pd.wg.Wait()
+    close(pd.errors)
+    pd.totalBar.SetTotal(int64(pd.totalFiles), true)
+    
+    // wait for progress bars to complete rendering
+    pd.progress.Wait()
+}

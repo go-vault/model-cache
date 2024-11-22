@@ -79,11 +79,8 @@ func snapshotDownload(client *Client, params *DownloadParams) (string, error) {
     }
 
     // wait for all downloads
-    pd.wg.Wait()
-    close(pd.errors)
+    pd.Wait()
 
-	// ensure total bar shows completion
-    pd.totalBar.SetTotal(int64(pd.totalFiles), true)
 
     // Check for errors
     for err := range pd.errors {
