@@ -72,7 +72,7 @@ func main() {
     downloader := pipeline.NewDiffusionPipelineDownloader(client)
     
     // Download a diffusion model
-    modelPath, err := downloader.Download("John6666/mix-16-anime-models-v10-sdxl", "", &pipeline.DownloadOptions{
+    modelPath, err := downloader.Download("black-forest-labs/FLUX.1-schnell", "", &pipeline.DownloadOptions{
 		UseSafetensors: true,
 	})
     if err != nil {

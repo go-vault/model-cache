@@ -143,32 +143,89 @@ func (dpd *DiffusionPipelineDownloader) tryDownloadFormat(repoID string, modelIn
 		return "", fmt.Errorf("failed to download model in %s format: %w", format, err)
 	}
 
-	// verify at least one weight file was downloaded
-	hasWeights := false
-	for component := range modelIndex.Components {
-		pattern := filepath.Join(snapshotPath, component, "*."+format)
-		if variant != "" {
-			pattern = filepath.Join(snapshotPath, component, "*."+variant+format)
-		}
-		matches, _ := filepath.Glob(pattern)
-		if len(matches) > 0 {
-			hasWeights = true
-			break
-		}
-	}
+	ignoredFolders := map[string]bool{
+        "scheduler":          true,
+        "tokenizer":         true,
+        "tokenizer_2":       true,
+        "tokenizer_3":       true,
+        "feature_extractor": true,
+        "safety_checker":    true,
+    }
 
-	if !hasWeights {
-		return "", fmt.Errorf("no weight files found in %s format", format)
-	}
+	missingComponents := []string{}
+    for component := range modelIndex.Components {
+		// skip ignored components
+		if ignoredFolders[component] {
+			continue
+		}
+        componentPath := filepath.Join(snapshotPath, component)
+        
+        // Check if component directory exists
+        if _, err := os.Stat(componentPath); os.IsNotExist(err) {
+            missingComponents = append(missingComponents, component)
+            continue
+        }
 
+        // List files in component directory
+        files, err := os.ReadDir(componentPath)
+        if err != nil {
+            missingComponents = append(missingComponents, component)
+            continue
+        }
+
+        // Build pattern for matching
+        var pattern string
+        if variant != "" {
+            pattern = "*." + variant + format
+        } else {
+            pattern = "*" + format
+        }
+
+        // Check if component has weights
+        hasComponentWeights := false
+        for _, file := range files {
+            if !file.IsDir() {
+                matched, err := filepath.Match(pattern, file.Name())
+                if err != nil {
+                    continue
+                }
+                if matched {
+                    hasComponentWeights = true
+                    break
+                }
+            }
+        }
+
+        if !hasComponentWeights {
+            missingComponents = append(missingComponents, component)
+        }
+    }
+
+    if len(missingComponents) > 0 {
+        return "", fmt.Errorf("missing weights for components in %s format: %v", format, missingComponents)
+    }
 
 	// download connected pipelines, if any
 	if err := dpd.downloadConnectedPipelines(modelIndex, variant); err != nil {
 		return "", fmt.Errorf("failed to download connected pipelines: %w", err)
 	}
 
-	return snapshotPath, nil
+    return snapshotPath, nil
 }
+
+// func listDirFiles(dir string) []string {
+//     files, err := os.ReadDir(dir)
+//     if err != nil {
+//         return nil
+//     }
+//     var fileNames []string
+//     for _, file := range files {
+//         if !file.IsDir() {
+//             fileNames = append(fileNames, file.Name())
+//         }
+//     }
+//     return fileNames
+// }
 
 
 func (dpd *DiffusionPipelineDownloader) parseModelIndex(path string) (*ModelIndex, error) {
