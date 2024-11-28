@@ -150,6 +150,7 @@ func (dpd *DiffusionPipelineDownloader) tryDownloadFormat(repoID string, modelIn
         "tokenizer_3":       true,
         "feature_extractor": true,
         "safety_checker":    true,
+        "image_encoder":     true,
     }
 
 	missingComponents := []string{}
