@@ -1,7 +1,6 @@
 package hub
 
 import (
-	"bufio"
 	"fmt"
 	"io"
 	"net/http"
@@ -11,7 +10,8 @@ import (
 	"time"
 
 	"github.com/gofrs/flock"
-	"github.com/schollz/progressbar/v3"
+	"github.com/vbauerster/mpb/v7"
+	"github.com/vbauerster/mpb/v7/decor"
 )
 
 
@@ -150,7 +150,7 @@ func fileDownload(client *Client, params *DownloadParams) (string, error) {
 
 	// download file
 	tmpPath := blobPath + ".incomplete"
-	if err := downloadFile(fileMetadata.Location, tmpPath, headers, fileMetadata.Size, fileName); err != nil {
+	if err := downloadFile(client, fileMetadata.Location, tmpPath, headers, fileMetadata.Size, fileName); err != nil {
 		return "", fmt.Errorf("failed to download file: %w", err)
 	}
 
@@ -168,7 +168,7 @@ func fileDownload(client *Client, params *DownloadParams) (string, error) {
 }
 
 
-func downloadFile(url, destPath string, headers *http.Header, expectedSize int, displayName string) error {
+func downloadFile(client *Client, url, destPath string, headers *http.Header, expectedSize int, displayName string) error {
 	// try to get existing file for resume
 	var resumeSize int64 = 0
 	if stat, err := os.Stat(destPath); err == nil {
@@ -188,7 +188,7 @@ func downloadFile(url, destPath string, headers *http.Header, expectedSize int, 
 
 	defer out.Close()
 
-	client := &http.Client{
+	httpClient := &http.Client{
 		Timeout: time.Minute * 30,
 	}
 
@@ -205,7 +205,7 @@ func downloadFile(url, destPath string, headers *http.Header, expectedSize int, 
 		req.Header.Set("Range", fmt.Sprintf("bytes=%d-", resumeSize))
 	}
 
-	resp, err := client.Do(req)
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		return err
 	}
@@ -229,34 +229,27 @@ func downloadFile(url, destPath string, headers *http.Header, expectedSize int, 
 		description = fmt.Sprintf("Resuming download of %s", displayName)
 	}
 
-	bar := progressbar.NewOptions64(
-		int64(expectedSize),
-		progressbar.OptionSetDescription(description),
-		progressbar.OptionSetWriter(os.Stderr),
-		progressbar.OptionShowBytes(true),
-		progressbar.OptionSetWidth(15),
-		progressbar.OptionThrottle(500*time.Millisecond),
-		progressbar.OptionShowCount(),
-		progressbar.OptionClearOnFinish(),
-		progressbar.OptionSetPredictTime(true),
-		progressbar.OptionSetTheme(progressbar.Theme{
-            Saucer:        "=",
-			SaucerHead:    ">",
-            SaucerPadding: "-",
-            BarStart:      "[",
-            BarEnd:        "]",
-        }),
-		progressbar.OptionSpinnerType(0),
-		progressbar.OptionFullWidth(),
-		progressbar.OptionSetRenderBlankState(true),
-	)
+	bar := client.Progress.AddBar(
+        int64(expectedSize),
+        mpb.PrependDecorators(
+            decor.Name(description+": ", decor.WC{W: len(description) + 2, C: decor.DidentRight}),
+            decor.Percentage(decor.WCSyncSpace),
+        ),
+        mpb.AppendDecorators(
+            decor.CountersKibiByte("%.2f / %.2f"),
+            decor.EwmaETA(decor.ET_STYLE_GO, 60),
+            decor.EwmaSpeed(decor.UnitKiB, "%.2f", 60),
+        ),
+    )
 
 	// set initial progress if resuming
 	if resumeSize > 0 {
-		bar.Add64(resumeSize)
+		bar.SetCurrent(resumeSize)
 	}
 
-	reader := bufio.NewReader(resp.Body)
+	reader := bar.ProxyReader(resp.Body)
+	defer reader.Close()
+
 	buf := make([]byte, 64*1024) // 64KB buffer
 
 	for {
@@ -267,7 +260,7 @@ func downloadFile(url, destPath string, headers *http.Header, expectedSize int, 
 				return werr
 			}
 
-			bar.Add(n)
+			// bar.Add(n)
 		}
 
 		if err == io.EOF {
@@ -277,6 +270,8 @@ func downloadFile(url, destPath string, headers *http.Header, expectedSize int, 
 			return err
 		}
 	}
+
+	bar.SetTotal(bar.Current(), true)
 
 	return nil
 }

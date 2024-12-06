@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"fmt"
+	"github.com/vbauerster/mpb/v7"
 )
 
 const (
@@ -21,6 +22,7 @@ type Client struct {
 	Token           string
 	CacheDir        string
 	UserAgent       string
+	Progress        *mpb.Progress
 }
 
 

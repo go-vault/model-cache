@@ -63,7 +63,7 @@ func snapshotDownload(client *Client, params *DownloadParams) (string, error) {
 	}
 	filesToDownload = filterFilesByPattern(filesToDownload, params.AllowPatterns, params.IgnorePatterns)
 
-	pd := newParallelDownloader(len(filesToDownload))
+	pd := newParallelDownloader(client, len(filesToDownload))
 
 
 	// start download
