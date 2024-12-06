@@ -231,6 +231,7 @@ func downloadFile(client *Client, url, destPath string, headers *http.Header, ex
 
 	bar := client.Progress.AddBar(
         int64(expectedSize),
+		mpb.BarRemoveOnComplete(),
         mpb.PrependDecorators(
             decor.Name(description+": ", decor.WC{W: len(description) + 2, C: decor.DidentRight}),
             decor.Percentage(decor.WCSyncSpace),

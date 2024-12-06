@@ -210,6 +210,7 @@ func downloadWithResume(url, destPath, tmpPath, apiKey string, progress *mpb.Pro
 
    progressMu.Lock()
    bar := progress.AddBar(totalSize,
+       mpb.BarRemoveOnComplete(),
        mpb.PrependDecorators(
            decor.Name(filepath.Base(destPath), decor.WC{W: 40, C: decor.DidentRight}),
            decor.CountersKibiByte("% .2f / % .2f"),

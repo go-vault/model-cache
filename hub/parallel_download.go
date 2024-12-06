@@ -37,6 +37,7 @@ func newParallelDownloader(client *Client, totalFiles int) *parallelDownloader {
 
     pd.totalBar = pd.progress.AddBar(
         int64(totalFiles),
+        mpb.BarRemoveOnComplete(),
         mpb.PrependDecorators(
             decor.Name(fmt.Sprintf("Fetching %d files:", totalFiles), decor.WC{W: len(fmt.Sprint(totalFiles)) + 20}),
             decor.CountersNoUnit("%d/%d", decor.WCSyncWidth),
@@ -95,6 +96,7 @@ func (pd *parallelDownloader) downloadFile(client *Client, params *DownloadParam
 
         bar := pd.progress.AddBar(
             int64(metadata.Size),
+            mpb.BarRemoveOnComplete(),
             mpb.PrependDecorators(
                 decor.Name(params.FileName, decor.WC{W: 50, C: decor.DidentRight}),
                 decor.Percentage(decor.WCSyncSpace),
@@ -242,5 +244,5 @@ func (pd *parallelDownloader) Wait() {
     pd.totalBar.SetTotal(int64(pd.totalFiles), true)
     
     // wait for progress bars to complete rendering
-    pd.progress.Wait()
+    // pd.progress.Wait()
 }
