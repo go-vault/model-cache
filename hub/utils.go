@@ -79,7 +79,7 @@ func getFileMetadata(client *Client, repoId string, filename string, headers *ht
 
 	// Handle LFS pointer fallback
 	if etag == "" || commitHash == "" {
-		pointerData, err := fetchLFSPointer(client.Endpoint, repoId, filename)
+		pointerData, err := fetchLFSPointer(client, client.Endpoint, repoId, filename)
 		if err != nil {
 			return nil, fmt.Errorf("failed to fetch LFS pointer: %w", err)
 		}
@@ -134,12 +134,24 @@ func fetchCommitHash(endpoint, repoId string) (string, error) {
 	return result.CommitHash, nil
 }
 
-func fetchLFSPointer(endpoint, repoId, filename string) (*LFSPointer, error) {
+func fetchLFSPointer(client *Client, endpoint, repoId, filename string) (*LFSPointer, error) {
 	rawURL := fmt.Sprintf("%s/%s/raw/%s/%s", endpoint, repoId, DefaultRevision, filename)
-	resp, err := http.Get(rawURL)
-	if err != nil {
-		return nil, fmt.Errorf("failed to fetch LFS pointer: %w", err)
-	}
+	req, err := http.NewRequest("GET", rawURL, nil)
+    if err != nil {
+        return nil, fmt.Errorf("failed to create request: %w", err)
+    }
+
+	if client.Token != "" {
+        req.Header.Set("Authorization", "Bearer " + client.Token)
+    }
+    req.Header.Set("User-Agent", client.UserAgent)
+
+	// Make request with headers
+    resp, err := http.DefaultClient.Do(req)
+    if err != nil {
+        return nil, fmt.Errorf("failed to fetch LFS pointer: %w", err)
+    }
+
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
@@ -280,5 +292,6 @@ func getHeaders(client *Client) *http.Header {
 	if client.Token != "" {
 		headers.Set("Authorization", "Bearer "+client.Token)
 	}
+
 	return headers
 }
