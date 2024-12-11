@@ -39,7 +39,7 @@ func newParallelDownloader(client *Client, totalFiles int) *parallelDownloader {
         int64(totalFiles),
         mpb.BarRemoveOnComplete(),
         mpb.PrependDecorators(
-            decor.Name(fmt.Sprintf("Fetching %d files:", totalFiles), decor.WC{W: len(fmt.Sprint(totalFiles)) + 20}),
+            decor.Name(fmt.Sprintf("Fetching %d files for %s:", totalFiles, client.Endpoint), decor.WC{W: len(fmt.Sprint(totalFiles)) + 20}),
             decor.CountersNoUnit("%d/%d", decor.WCSyncWidth),
         ),
         mpb.AppendDecorators(
