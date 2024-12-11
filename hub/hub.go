@@ -107,7 +107,14 @@ type DownloadParams struct {
 	LocalFilesOnly 	bool
 	AllowPatterns   []string
 	IgnorePatterns  []string
+	Components      map[string]ComponentDef
 }
+
+type ComponentDef struct {
+    ClassName string `json:"class_name"`
+    Source    string `json:"source"`
+}
+
 
 type Repo struct {
 	Id       string

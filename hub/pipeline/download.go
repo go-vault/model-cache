@@ -67,7 +67,7 @@ func NewDiffusionPipelineDownloader(client *hub.Client) *DiffusionPipelineDownlo
 }
 
 
-func (dpd *DiffusionPipelineDownloader) Download(repoID string, variant string, opts *DownloadOptions) (string, error) {
+func (dpd *DiffusionPipelineDownloader) Download(repoID string, variant string, opts *DownloadOptions, components map[string]*hub.ComponentDef) (string, error) {
 	if opts == nil {
 		opts = &DownloadOptions{
 			UseSafetensors: false,
@@ -99,7 +99,7 @@ func (dpd *DiffusionPipelineDownloader) Download(repoID string, variant string, 
 	var lastErr error
 	if opts.UseSafetensors {
 		// only try safetensors
-		snapshotPath, err := dpd.tryDownloadFormat(repoID, modelIndex, variant, ".safetensors")
+		snapshotPath, err := dpd.tryDownloadFormat(repoID, modelIndex, variant, ".safetensors", components)
 		if err != nil {
 			return "", fmt.Errorf("safetensors required but not available: %w", err)
 		}
@@ -114,7 +114,7 @@ func (dpd *DiffusionPipelineDownloader) Download(repoID string, variant string, 
 	}
 
 	for _, format := range formats {
-		snapshotPath, err := dpd.tryDownloadFormat(repoID, modelIndex, variant, format)
+		snapshotPath, err := dpd.tryDownloadFormat(repoID, modelIndex, variant, format, components)
 		if err == nil {
 			return snapshotPath, nil
 		}
@@ -127,8 +127,8 @@ func (dpd *DiffusionPipelineDownloader) Download(repoID string, variant string, 
 }
 
 
-func (dpd *DiffusionPipelineDownloader) tryDownloadFormat(repoID string, modelIndex *ModelIndex, variant string, format string) (string, error) {
-	patterns := dpd.buildDownloadPatterns(modelIndex, variant, format)
+func (dpd *DiffusionPipelineDownloader) tryDownloadFormat(repoID string, modelIndex *ModelIndex, variant string, format string, components map[string]*hub.ComponentDef) (string, error) {
+	patterns := dpd.buildDownloadPatterns(modelIndex, variant, format, components)
 
 	params := &hub.DownloadParams{
 		Repo: &hub.Repo{
@@ -244,10 +244,23 @@ func (dpd *DiffusionPipelineDownloader) parseModelIndex(path string) (*ModelInde
 }
 
 
-func (dpd *DiffusionPipelineDownloader) buildDownloadPatterns(index *ModelIndex, variant string, format string) []string {
+func (dpd *DiffusionPipelineDownloader) buildDownloadPatterns(index *ModelIndex, variant string, format string, components map[string]*hub.ComponentDef) []string {
 	patterns := []string{}
 
+    // Get list of component folders to ignore
+    ignoreComponents := make(map[string]bool)
+    if components != nil {
+        for compName := range components {
+            ignoreComponents[compName] = true
+        }
+    }
+
 	for componentName := range index.Components {
+
+		// skip ignored components
+		if ignoreComponents[componentName] {
+			continue
+		}
 
 		// add component's config files
         patterns = append(patterns,
@@ -301,7 +314,7 @@ func (dpd *DiffusionPipelineDownloader) downloadConnectedPipelines(index *ModelI
 	}
 
 	for _, connectedRepo := range index.ConnectedPipes {
-		if _, err := dpd.Download(connectedRepo, variant, nil); err != nil {
+		if _, err := dpd.Download(connectedRepo, variant, nil, nil); err != nil {
 			return fmt.Errorf("failed to download connected pipeline %s: %w", connectedRepo, err)
 		}
 	}
