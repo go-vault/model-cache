@@ -98,7 +98,7 @@ func getModelInfo(client *Client, repo *Repo) (*ModelInfo, error) {
 		url = fmt.Sprintf("%s/resolve/%s", url, repo.Revision)
 	}
 
-	fmt.Println("Getting model info from:", url)
+	// fmt.Println("Getting model info from:", url)
 
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {

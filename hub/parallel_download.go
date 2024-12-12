@@ -10,9 +10,9 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+    "net"
 
-	// "strings"
-
+	"github.com/cenkalti/backoff/v4"
 	"github.com/vbauerster/mpb/v7"
 	"github.com/vbauerster/mpb/v7/decor"
 )
@@ -144,8 +144,18 @@ func (pd *parallelDownloader) downloadSingleFile(client *Client, params *Downloa
         headers.Set("Authorization", "Bearer "+client.Token)
     }
 
-    if err := downloadWithBar(metadata.Location, tmpPath, headers, bar); err != nil {
-        return "", err
+    // Backoff and retry logic
+    b := backoff.NewExponentialBackOff()
+    b.MaxElapsedTime = 5 * time.Minute
+    b.InitialInterval = 1 * time.Second
+    b.MaxInterval = 30 * time.Second
+
+    err := backoff.Retry(func() error {
+        return downloadWithBar(metadata.Location, tmpPath, headers, bar)
+    }, b)
+
+    if err != nil {
+        return "", fmt.Errorf("failed after retries: %w", err)
     }
 
     // Move to final location
@@ -177,7 +187,10 @@ func downloadWithBar(url string, destPath string, headers *http.Header, bar *mpb
     if err != nil {
         return err
     }
-    defer out.Close()
+    defer func() {
+        out.Sync()
+        out.Close()
+    }()
 
     req, err := http.NewRequest("GET", url, nil)
     if err != nil {
@@ -194,7 +207,15 @@ func downloadWithBar(url string, destPath string, headers *http.Header, bar *mpb
     }
 
     client := &http.Client{
-        Timeout: time.Minute * 30,
+        Timeout: 0,
+        Transport: &http.Transport{
+            DialContext: (&net.Dialer{
+                Timeout: 60 * time.Second,
+            }).DialContext,
+            TLSHandshakeTimeout:   60 * time.Second,
+            ResponseHeaderTimeout: 60 * time.Second,
+            IdleConnTimeout:       60 * time.Second,
+        },
     }
 
     resp, err := client.Do(req)
@@ -219,6 +240,9 @@ func downloadWithBar(url string, destPath string, headers *http.Header, bar *mpb
     reader := bufio.NewReader(resp.Body)
     buf := make([]byte, 32*1024)
 
+    stallTimer := time.Duration(0)
+    lastUpdate := time.Now()
+
     for {
         n, err := reader.Read(buf)
         if n > 0 {
@@ -226,6 +250,17 @@ func downloadWithBar(url string, destPath string, headers *http.Header, bar *mpb
                 return werr
             }
             bar.IncrBy(n)
+
+            now := time.Now()
+            if now.Sub(lastUpdate) > 30*time.Second {
+                stallTimer += now.Sub(lastUpdate)
+                if stallTimer > 2*time.Minute {
+                    return fmt.Errorf("download stalled for too long")
+                }
+            } else {
+                stallTimer = 0
+                lastUpdate = now
+            }
         }
 
         if err == io.EOF {
