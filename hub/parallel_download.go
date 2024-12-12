@@ -28,18 +28,19 @@ type parallelDownloader struct {
 }
 
 
-func newParallelDownloader(client *Client, totalFiles int) *parallelDownloader {
+func newParallelDownloader(client *Client, totalFiles int, repoId string) *parallelDownloader {
     pd := &parallelDownloader{
         progress: client.Progress,
         errors: make(chan error, 100),
         totalFiles: totalFiles,
     }
 
+
     pd.totalBar = pd.progress.AddBar(
         int64(totalFiles),
         mpb.BarRemoveOnComplete(),
         mpb.PrependDecorators(
-            decor.Name(fmt.Sprintf("Fetching %d files:", totalFiles), decor.WC{W: len(fmt.Sprint(totalFiles)) + 20}),
+            decor.Name(fmt.Sprintf("Fetching %d files for %s:", totalFiles, repoId), decor.WC{W: len(fmt.Sprint(totalFiles)) + 20}),
             decor.CountersNoUnit("%d/%d", decor.WCSyncWidth),
         ),
         mpb.AppendDecorators(
