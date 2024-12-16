@@ -241,6 +241,7 @@ func downloadWithBar(url string, destPath string, headers *http.Header, bar *mpb
     }
 
     if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusPartialContent {
+        log.Printf("[Download] Bad status: %s", resp.Status)
         return fmt.Errorf("bad status: %s", resp.Status)
     }
 
@@ -255,6 +256,7 @@ func downloadWithBar(url string, destPath string, headers *http.Header, bar *mpb
         n, err := reader.Read(buf)
         if n > 0 {
             if _, werr := out.Write(buf[:n]); werr != nil {
+                log.Printf("[Download] Failed to write to file: %v", werr)
                 return werr
             }
             bar.IncrBy(n)
@@ -263,6 +265,7 @@ func downloadWithBar(url string, destPath string, headers *http.Header, bar *mpb
             if now.Sub(lastUpdate) > 30*time.Second {
                 stallTimer += now.Sub(lastUpdate)
                 if stallTimer > 2*time.Minute {
+                    log.Printf("[Download] Download stalled for too long")
                     return fmt.Errorf("download stalled for too long")
                 }
             } else {
@@ -272,9 +275,11 @@ func downloadWithBar(url string, destPath string, headers *http.Header, bar *mpb
         }
 
         if err == io.EOF {
+            log.Printf("[Download] EOF")
             break
         }
         if err != nil {
+            log.Printf("[Download] Read error: %v", err)
             return err
         }
     }
