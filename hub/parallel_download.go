@@ -29,13 +29,15 @@ type parallelDownloader struct {
 }
 
 
-func newParallelDownloader(client *Client, totalFiles int, repoId string) *parallelDownloader {
+func newParallelDownloader(totalFiles int, repoId string) *parallelDownloader {
     pd := &parallelDownloader{
-        progress: client.Progress,
+        progress: mpb.New(
+            mpb.WithWidth(60),
+            mpb.WithRefreshRate(180*time.Millisecond),
+        ),
         errors: make(chan error, 100),
         totalFiles: totalFiles,
     }
-
 
     pd.totalBar = pd.progress.AddBar(
         int64(totalFiles),
@@ -87,7 +89,6 @@ func (pd *parallelDownloader) downloadFile(client *Client, params *DownloadParam
                 os.MkdirAll(filepath.Dir(pointerPath), 0755)
                 if err := createSymlink(blobPath, pointerPath); err != nil {
                     log.Printf("[Download] Failed to create symlink for %s: %v", params.FileName, err)
-                    fmt.Printf("[Download] Failed to create symlink for %s: %v", params.FileName, err)
                     pd.errors <- fmt.Errorf("failed to create symlink for %s: %w", params.FileName, err)
                     return
                 }
@@ -155,26 +156,22 @@ func (pd *parallelDownloader) downloadSingleFile(client *Client, params *Downloa
 
     err := backoff.Retry(func() error {
         log.Printf("[Download] Downloading file %s with bar %v", metadata.Location, bar)
-        fmt.Printf("[Download] Downloading file %s with bar %v", metadata.Location, bar)
         return downloadWithBar(metadata.Location, tmpPath, headers, bar)
     }, b)
 
     if err != nil {
         log.Printf("[Download] Failed after retries: %v", err)
-        fmt.Printf("[Download] Failed after retries: %v", err)
         return "", fmt.Errorf("failed after retries: %w", err)
     }
 
     // Move to final location
     if err := os.Rename(tmpPath, blobPath); err != nil {
         log.Printf("[Download] Failed to rename file: %v", err)
-        fmt.Printf("[Download] Failed to rename file: %v", err)
         return "", err
     }
 
     if err := createSymlink(blobPath, pointerPath); err != nil {
         log.Printf("[Download] Failed to create symlink: %v", err)
-        fmt.Printf("[Download] Failed to create symlink: %v", err)
         return "", err
     }
 
@@ -291,5 +288,5 @@ func (pd *parallelDownloader) Wait() {
     pd.totalBar.SetTotal(int64(pd.totalFiles), true)
     
     // wait for progress bars to complete rendering
-    // pd.progress.Wait()
+    pd.progress.Wait()
 }
