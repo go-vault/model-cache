@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"time"
+	"log"
 
 	"github.com/gofrs/flock"
 	"github.com/vbauerster/mpb/v7"
@@ -161,6 +162,8 @@ func fileDownload(client *Client, params *DownloadParams) (string, error) {
 
 	// create symlink
 	if err := createSymlink(blobPath, pointerPath); err != nil {
+		log.Printf("[Download] Failed to create symlink: %v", err)
+		fmt.Printf("[Download] Failed to create symlink: %v", err)
 		return "", err
 	}
 
@@ -220,6 +223,8 @@ func downloadFile(client *Client, url, destPath string, headers *http.Header, ex
 	}
 
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusPartialContent {
+		log.Printf("[Download] Bad status: %s", resp.Status)
+		fmt.Printf("[Download] Bad status: %s", resp.Status)
 		return fmt.Errorf("bad status: %s", resp.Status)
 	}
 

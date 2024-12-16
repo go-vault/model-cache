@@ -11,6 +11,7 @@ import (
 	"sync/atomic"
 	"time"
     "net"
+    "log"
 
 	"github.com/cenkalti/backoff/v4"
 	"github.com/vbauerster/mpb/v7"
@@ -85,6 +86,8 @@ func (pd *parallelDownloader) downloadFile(client *Client, params *DownloadParam
                 // blob exists but pointer doesn't exist - create the pointer
                 os.MkdirAll(filepath.Dir(pointerPath), 0755)
                 if err := createSymlink(blobPath, pointerPath); err != nil {
+                    log.Printf("[Download] Failed to create symlink for %s: %v", params.FileName, err)
+                    fmt.Printf("[Download] Failed to create symlink for %s: %v", params.FileName, err)
                     pd.errors <- fmt.Errorf("failed to create symlink for %s: %w", params.FileName, err)
                     return
                 }
@@ -151,19 +154,27 @@ func (pd *parallelDownloader) downloadSingleFile(client *Client, params *Downloa
     b.MaxInterval = 30 * time.Second
 
     err := backoff.Retry(func() error {
+        log.Printf("[Download] Downloading file %s with bar %v", metadata.Location, bar)
+        fmt.Printf("[Download] Downloading file %s with bar %v", metadata.Location, bar)
         return downloadWithBar(metadata.Location, tmpPath, headers, bar)
     }, b)
 
     if err != nil {
+        log.Printf("[Download] Failed after retries: %v", err)
+        fmt.Printf("[Download] Failed after retries: %v", err)
         return "", fmt.Errorf("failed after retries: %w", err)
     }
 
     // Move to final location
     if err := os.Rename(tmpPath, blobPath); err != nil {
+        log.Printf("[Download] Failed to rename file: %v", err)
+        fmt.Printf("[Download] Failed to rename file: %v", err)
         return "", err
     }
 
     if err := createSymlink(blobPath, pointerPath); err != nil {
+        log.Printf("[Download] Failed to create symlink: %v", err)
+        fmt.Printf("[Download] Failed to create symlink: %v", err)
         return "", err
     }
 

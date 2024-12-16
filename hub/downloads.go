@@ -12,6 +12,7 @@ import (
    "time"
    "net"
    "sync"
+   "log"
    
    "github.com/vbauerster/mpb/v7"
    "github.com/vbauerster/mpb/v7/decor"
@@ -110,7 +111,11 @@ func (s *CivitaiSource) Download(destPath string, progress *mpb.Progress) error 
    b.MaxInterval = 30 * time.Second
 
    return backoff.Retry(func() error {
-       return downloadWithResume(s.url, destPath, tmpPath, s.apiKey, progress, &s.progressMu)
+       if err := downloadWithResume(s.url, destPath, tmpPath, s.apiKey, progress, &s.progressMu); err != nil {
+           log.Printf("[Download] Retry error: %v", err)
+           return err
+       }
+       return nil
    }, b)
 }
 
@@ -185,6 +190,8 @@ func downloadWithResume(url, destPath, tmpPath, apiKey string, progress *mpb.Pro
 
    resp, err := client.Do(req)
    if err != nil {
+       log.Printf("[Download] Request failed for URL %s: %v", url, err)
+       fmt.Printf("[Download] Request failed for URL %s: %v", url, err)
        return fmt.Errorf("request failed: %w", err)
    }
    defer resp.Body.Close()
@@ -199,10 +206,14 @@ func downloadWithResume(url, destPath, tmpPath, apiKey string, progress *mpb.Pro
            out.Truncate(0)
            totalSize = resp.ContentLength
        } else {
+           log.Printf("resume failed with status %d", resp.StatusCode)
+           fmt.Printf("resume failed with status (fmt) %d", resp.StatusCode)
            return fmt.Errorf("resume failed with status %d", resp.StatusCode)
        }
    } else {
        if resp.StatusCode != http.StatusOK {
+           log.Printf("download failed with status %d", resp.StatusCode)
+           fmt.Printf("download failed with status (fmt) %d", resp.StatusCode)
            return fmt.Errorf("download failed with status %d", resp.StatusCode)
        }
        totalSize = resp.ContentLength
