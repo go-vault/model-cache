@@ -29,15 +29,13 @@ type parallelDownloader struct {
 }
 
 
-func newParallelDownloader(totalFiles int, repoId string) *parallelDownloader {
+func newParallelDownloader(client *Client, totalFiles int, repoId string) *parallelDownloader {
     pd := &parallelDownloader{
-        progress: mpb.New(
-            mpb.WithWidth(60),
-            mpb.WithRefreshRate(180*time.Millisecond),
-        ),
+        progress: client.Progress,
         errors: make(chan error, 100),
         totalFiles: totalFiles,
     }
+
 
     pd.totalBar = pd.progress.AddBar(
         int64(totalFiles),
