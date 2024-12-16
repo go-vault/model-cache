@@ -153,6 +153,11 @@ func (dpd *DiffusionPipelineDownloader) tryDownloadFormat(repoID string, modelIn
         "image_encoder":     true,
     }
 
+    for compName := range components {
+        // add the component to the ignore list
+		ignoredFolders[compName] = true
+	}
+
 	missingComponents := []string{}
     for component := range modelIndex.Components {
 		// skip ignored components
