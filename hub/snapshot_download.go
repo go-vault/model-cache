@@ -64,7 +64,7 @@ func snapshotDownload(client *Client, params *DownloadParams) (string, error) {
 	}
 	filesToDownload = filterFilesByPattern(filesToDownload, params.AllowPatterns, params.IgnorePatterns)
 
-	maxConcurrentDownloads := 4
+	maxConcurrentDownloads := 1
 
 	pd := newParallelDownloader(client, len(filesToDownload), params.Repo.Id, maxConcurrentDownloads)
 
