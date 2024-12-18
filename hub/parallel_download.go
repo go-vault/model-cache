@@ -24,16 +24,21 @@ type parallelDownloader struct {
     wg       sync.WaitGroup
     errors   chan error
     totalFiles int
+    semaphore chan struct{}
     downloadedFiles atomic.Int32
     totalBar *mpb.Bar
 }
 
 
-func newParallelDownloader(client *Client, totalFiles int, repoId string) *parallelDownloader {
+func newParallelDownloader(client *Client, totalFiles int, repoId string, maxConcurrentDownloads int) *parallelDownloader {
     pd := &parallelDownloader{
-        progress: client.Progress,
-        errors: make(chan error, 100),
+        progress: mpb.New(
+            mpb.WithWidth(60),
+            mpb.WithRefreshRate(180*time.Millisecond),
+        ),
+        errors:   make(chan error, 100),
         totalFiles: totalFiles,
+        semaphore: make(chan struct{}, maxConcurrentDownloads), // Semaphore initialization
     }
 
 
@@ -57,6 +62,10 @@ func (pd *parallelDownloader) downloadFile(client *Client, params *DownloadParam
     pd.wg.Add(1)
     go func() {
         defer pd.wg.Done()
+
+        // Acquire semaphore to limit concurrency
+        pd.semaphore <- struct{}{}
+        defer func() { <-pd.semaphore }()
 
         storageFolder := filepath.Join(
             client.CacheDir,

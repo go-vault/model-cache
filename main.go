@@ -86,14 +86,7 @@ func main() {
     
     // Download a diffusion model, ignore text_encoder
     fmt.Println("Starting download...")
-    modelPath, err := downloader.Download("stabilityai/stable-diffusion-3.5-large", "", &pipeline.DownloadOptions{
-        UseSafetensors: true,
-    }, map[string]*hub.ComponentDef{
-        "text_encoder": {
-            ClassName: "text_encoder",
-            Source: "https://huggingface.co/stabilityai/stable-diffusion-3.5-large/resolve/main/text_encoder/diffusion_pytorch_model.safetensors",
-        },
-    })
+    modelPath, err := downloader.Download("fal/AuraFlow-v0.3", "", nil, nil)
     if err != nil {
         log.Fatalf("Failed to download model: %v", err)
     }

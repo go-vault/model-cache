@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"log"
+	// "log"
 )
 
 type ModelInfo struct {
@@ -64,7 +64,9 @@ func snapshotDownload(client *Client, params *DownloadParams) (string, error) {
 	}
 	filesToDownload = filterFilesByPattern(filesToDownload, params.AllowPatterns, params.IgnorePatterns)
 
-	// pd := newParallelDownloader(client, len(filesToDownload), params.Repo.Id)
+	maxConcurrentDownloads := 4
+
+	pd := newParallelDownloader(client, len(filesToDownload), params.Repo.Id, maxConcurrentDownloads)
 
 
 	// start download
@@ -76,25 +78,20 @@ func snapshotDownload(client *Client, params *DownloadParams) (string, error) {
             ForceDownload:  params.ForceDownload,
             LocalFilesOnly: params.LocalFilesOnly,
         }
-        log.Printf("[Download] Starting sequential download for %s", filename)
-		_, err := fileDownload(client, fileParams)
-		if err != nil {
-			log.Printf("[Download] Error downloading file %s: %v", filename, err)
-			return "", fmt.Errorf("failed to download %s: %w", filename, err)
-		}
-		log.Printf("[Download] Completed download for %s", filename)
+
+		pd.downloadFile(client, fileParams)
     }
 
     // wait for all downloads
-    // pd.Wait()
+    pd.Wait()
 
 
-    // // Check for errors
-    // for err := range pd.errors {
-    //     if err != nil {
-    //         return "", err
-    //     }
-    // }
+    // Check for errors
+    for err := range pd.errors {
+        if err != nil {
+            return "", err
+        }
+    }
 
     return snapshotFolder, nil
 }
