@@ -1,4 +1,4 @@
-module github.com/cozy-creator/hf-hub
+module github.com/go-vault/model-cache
 
 go 1.22.6
 
