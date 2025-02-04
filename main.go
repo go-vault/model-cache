@@ -8,8 +8,8 @@ import (
 	// "net/http"
 	// "strings"
 
-    "github.com/cozy-creator/hf-hub/hub"
-    "github.com/cozy-creator/hf-hub/hub/pipeline"
+    "github.com/go-vault/model-cache/hub"
+    "github.com/go-vault/model-cache/pipeline"
     "github.com/vbauerster/mpb/v7"
 )
 
